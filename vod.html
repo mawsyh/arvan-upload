@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>File Upload</title>
+    <script src="https://cdn.jsdelivr.net/npm/tus-js-client@4.1.0/dist/tus.js"></script>
+  </head>
+  <body>
+    <input type="file" id="fileInput" />
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const fileInput = document.querySelector('input[type="file"]');
+        fileInput.addEventListener("change", function (e) {
+          // Get the selected file from the input element
+          var file = e.target.files[0];
+          const channelId = "d5123edb-a0b9-4f7c-8d7a-65db37a68c45";
+          const url = `https://napi.arvancloud.com/vod/2.0/channels/${channelId}/files`;
+          const authorization = "apikey bb1e6857-2860-5afd-b704-9402e5ec22ed";
+
+          // Create a new tus upload
+          var upload = new tus.Upload(file, {
+            endpoint: "http://localhost:1080/files/",
+            retryDelays: [0, 3000, 5000, 10000, 20000],
+            metadata: {
+              filename: file.name,
+              filetype: file.type,
+            },
+            onError: function (error) {
+              console.log("Failed because: " + error);
+            },
+            onProgress: function (bytesUploaded, bytesTotal) {
+              var percentage = ((bytesUploaded / bytesTotal) * 100).toFixed(2);
+              console.log(bytesUploaded, bytesTotal, percentage + "%");
+            },
+            onSuccess: async () => {
+              console.log("Download %s from %s", upload.file.name, upload.url);
+              fileId = upload.url.split("/").pop();
+              const options = {
+                method: "POST",
+                headers: {
+                  Authorization: authorization,
+                  "Accept-Language": "en",
+                  Accept: "application/json",
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  title: file.name,
+                  file_id: fileId,
+                  convert_mode: "auto",
+                }),
+              };
+
+              try {
+                const response = await fetch(
+                  `https://napi.arvancloud.com/vod/2.0/channels/${channelId}/videos`,
+                  options
+                );
+                const data = await response.json();
+                console.log(data);
+              } catch (error) {
+                console.error("Error during video creation:", error);
+              }
+            },
+          });
+
+          // Check if there are any previous uploads to continue.
+          upload.findPreviousUploads().then(function (previousUploads) {
+            // Found previous uploads so we select the first one.
+            if (previousUploads.length) {
+              upload.resumeFromPreviousUpload(previousUploads[0]);
+            }
+
+            // Start the upload
+            upload.start();
+          });
+        });
+      });
+    </script>
+  </body>
+</html>
